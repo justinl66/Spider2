@@ -11,6 +11,7 @@ from tqdm import tqdm
 
 from spider_agent.envs.spider_agent import Spider_Agent_Env
 from spider_agent.agent.agents import PromptAgent
+from spider_agent.rag.integration import RagAugmentedAgent
 
 # Add support for custom prompts
 if os.environ.get("SPIDER_SNOW_PROMPT_PATH"):
@@ -88,6 +89,12 @@ def config() -> argparse.Namespace:
     parser.add_argument("--dbt_only", action="store_true")
     parser.add_argument("--sf_only", action="store_true")
     
+    # RAG-specific arguments
+    parser.add_argument("--use_rag", action="store_true", default=False, help="Use Retrieval-Augmented Generation")
+    parser.add_argument("--embedding_model", type=str, default="sentence-transformers/all-MiniLM-L6-v2", help="Embedding model to use for RAG")
+    parser.add_argument("--persist_directory", type=str, default="./rag_vectors", help="Directory to persist vector store")
+    parser.add_argument("--schema_dir", type=str, default="./examples", help="Directory containing schema files")
+    parser.add_argument("--knowledge_dir", type=str, default="./documents", help="Directory containing external knowledge")
     
     args = parser.parse_args()
 
@@ -122,15 +129,35 @@ def test(
         }
     }
     
-    agent = PromptAgent(
-        model=args.model,
-        max_tokens=args.max_tokens,
-        top_p=args.top_p,
-        temperature=args.temperature,
-        max_memory_length=args.max_memory_length,
-        max_steps=args.max_steps,
-        use_plan=args.plan
-    )
+    # Create either a standard agent or RAG-augmented agent based on command-line args
+    if args.use_rag:
+        logger.info("Using RAG-augmented agent")
+        agent = RagAugmentedAgent(
+            model=args.model,
+            max_tokens=args.max_tokens,
+            top_p=args.top_p,
+            temperature=args.temperature,
+            max_memory_length=args.max_memory_length,
+            max_steps=args.max_steps,
+            use_plan=args.plan,
+            # RAG-specific parameters
+            use_rag=True,
+            embedding_model=args.embedding_model,
+            persist_directory=args.persist_directory,
+            schema_dir=args.schema_dir,
+            knowledge_dir=args.knowledge_dir
+        )
+    else:
+        logger.info("Using standard agent without RAG")
+        agent = PromptAgent(
+            model=args.model,
+            max_tokens=args.max_tokens,
+            top_p=args.top_p,
+            temperature=args.temperature,
+            max_memory_length=args.max_memory_length,
+            max_steps=args.max_steps,
+            use_plan=args.plan
+        )
     valid_ids = []
     ## load task configs
     assert os.path.exists(args.test_path) and args.test_path.endswith(".jsonl"), f"Invalid test_path, must be a valid jsonl file: {args.test_path}"

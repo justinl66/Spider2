@@ -39,6 +39,22 @@ export AZURE_API_KEY=your_openai_api_key
 python run.py --example_index 0 --multi_loop --model azure/gpt-4o -s gpt-4o-test_run2
 ```
 
+### Running with RAG (Retrieval-Augmented Generation)
+
+The agent now supports Retrieval-Augmented Generation (RAG) to enhance SQL queries with relevant context:
+
+```
+# Run with default RAG settings
+python run.py --model gpt-4o -s rag_test1 --use_rag
+
+# Run with custom RAG settings
+python run.py --model gpt-4o -s rag_test2 --use_rag \
+  --embedding_model "sentence-transformers/all-mpnet-base-v2" \
+  --persist_directory "./custom_rag_vectors" \
+  --schema_dir "./examples" \
+  --knowledge_dir "../../spider2-snow/resource/documents"
+```
+
 
 
 ### Evaluation
