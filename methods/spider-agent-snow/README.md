@@ -32,6 +32,12 @@ export OPENAI_API_KEY=your_openai_api_key
 python run.py --model gpt-4o -s test1
 ```
 
+```
+For MARS,
+export SPIDER_SNOW_PROMPT_PATH=/home/jl6/GitRepos/Spider2/methods/spider-agent-snow/textgrad_optimization/optimized_snowflake_prompt.py
+export AZURE_API_KEY=your_openai_api_key
+python run.py --example_index 0 --multi_loop --model azure/gpt-4o -s gpt-4o-test_run2
+```
 
 
 

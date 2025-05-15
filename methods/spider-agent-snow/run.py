@@ -12,6 +12,14 @@ from tqdm import tqdm
 from spider_agent.envs.spider_agent import Spider_Agent_Env
 from spider_agent.agent.agents import PromptAgent
 
+# Add support for custom prompts
+if os.environ.get("SPIDER_SNOW_PROMPT_PATH"):
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "textgrad_optimization"))
+    try:
+        from load_custom_prompt import patch_prompts
+        patch_prompts()
+    except ImportError:
+        print("Warning: Custom prompt loader not found")
 
 #  Logger Configs {{{ #
 logger = logging.getLogger("spider_agent")
@@ -51,6 +59,8 @@ def config() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run end-to-end evaluation on the benchmark"
     )
+    
+    parser.add_argument("--multi_loop", action="store_true", default=False, help="Utilize multiple solution attempts to achieve best solution")
     
     parser.add_argument("--max_steps", type=int, default=20)
     
@@ -195,42 +205,154 @@ def test(
         source_data_dir = os.path.dirname(args.test_path)        
         task_config['config'] = [{"type": "copy_all_subfiles", "parameters": {"dirs": [os.path.join(source_data_dir, task_config["instance_id"])]}}]
 
-        env = Spider_Agent_Env(
-            env_config=env_config,
-            task_config=task_config,
-            cache_dir="./cache",
-            mnt_dir=output_dir
-        )
-    
-        agent.set_env_and_task(env)
-    
-        logger.info('Task input:' + task_config['instruction'])
-        done, result_output = agent.run()
-        trajectory = agent.get_trajectory()
+        if args.multi_loop:
+            logger.info(f"Running multi-loop (2 attempts) for {instance_id}")
+            successful_runs = []
+            all_runs = []
+            last_successful_sql = None  # Track the last successful SQL query
+            
+            for attempt in range(2):
+                # Create a separate output directory for each attempt
+                attempt_dir = os.path.join(output_dir, f"attempt_{attempt+1}")
+                os.makedirs(attempt_dir, exist_ok=True)
+                
+                # Create a new environment for each attempt
+                attempt_env_config = env_config.copy()
+                attempt_env_config["init_args"]["name"] = f"{experiment_id}-{task_config['instance_id']}-attempt-{attempt+1}"
+                
+                attempt_env = Spider_Agent_Env(
+                    env_config=attempt_env_config,
+                    task_config=task_config,
+                    cache_dir="./cache",
+                    mnt_dir=attempt_dir
+                )
+                
+                # If we have a previous successful solution, modify the task config
+                if attempt > 0 and last_successful_sql:
+                    # Create a modified task config with the updated instruction
+                    modified_task_config = task_config.copy()
+                    modified_task_config["instruction"] = task_config["instruction"] + f"\n\nHere's a tentative previous solution that might help, however there is a possibility that it is wrong.:\n```\n{last_successful_sql}\n```"
+                    
+                    # Reset agent for this attempt with modified task
+                    agent.set_env_and_task(attempt_env)
+                    
+                    # Update the instruction after set_env_and_task (this accesses a public attribute)
+                    agent.instruction = modified_task_config["instruction"]
+                    agent.system_message = agent.system_message.replace(task_config["instruction"], modified_task_config["instruction"])
+                    
+                    # Update the first message in history_messages with the new system message
+                    if agent.history_messages and agent.history_messages[0]["role"] == "system":
+                        agent.history_messages[0]["content"][0]["text"] = agent.system_message
+                else:
+                    # Standard initialization for first attempt
+                    agent.set_env_and_task(attempt_env)
+                
+                # Run the agent
+                logger.info(f'Task input (attempt {attempt+1}/2): {agent.instruction}')
+                done, result_output = agent.run()
+                trajectory = agent.get_trajectory()
+                
+                # Save results for this attempt
+                os.makedirs(os.path.join(attempt_dir, "spider"), exist_ok=True)
+                result_files = attempt_env.post_process()
+                
+                spider_result = {
+                    "attempt_number": attempt+1,
+                    "finished": done, 
+                    "steps": len(trajectory["trajectory"]),
+                    "result": result_output,
+                    "result_files": result_files, 
+                    **trajectory
+                }
+                
+                # Save individual attempt
+                with open(os.path.join(attempt_dir, "spider/result.json"), "w") as f:
+                    json.dump(spider_result, f, indent=2)
+                
+                all_runs.append(spider_result)
+                
+                # If successful, add to successful runs and extract SQL for next attempt
+                if done:
+                    successful_runs.append(spider_result)
+                    
+                    # Extract the SQL query for next attempt
+                    if trajectory["trajectory"]:
+                        for step in reversed(trajectory["trajectory"]):
+                            action_str = step["action"]
+                            if "SNOWFLAKE_EXEC_SQL" in action_str or "BIGQUERY_EXEC_SQL" in action_str:
+                                last_successful_sql = action_str
+                                break
+                
+                # Clean up
+                attempt_env.close()
+                
+                # Delete sqlite files if needed
+                # ... (rest of the implementation remains the same)
+                
+                # Delete sqlite files if needed
+                if task_type == 'local':
+                    sqlite_files = glob.glob(os.path.join(attempt_dir, '*.sqlite')) + \
+                                  glob.glob(os.path.join(attempt_dir, '*.duckdb'))
+                    for file_path in sqlite_files:
+                        try:
+                            os.remove(file_path)
+                            print(f"Deleted: {file_path}")
+                        except Exception as e:
+                            print(f"Error deleting {file_path}: {e}")
+            
+            # Save multi-run summary
+            with open(os.path.join(output_dir, "multi_results.json"), "w") as f:
+                json.dump({
+                    "total_attempts": 2,
+                    "successful_attempts": len(successful_runs),
+                    "successful_run_numbers": [run["attempt_number"] for run in successful_runs]
+                }, f, indent=2)
+            
+            # Use best run as main result (first successful run, or last run if none succeeded)
+            best_run = successful_runs[0] if successful_runs else all_runs[-1]
+            
+            # Save as main result.json
+            with open(os.path.join(output_dir, "best_result.json"), "w") as f:
+                json.dump({
+                    **best_run,
+                    "multi_loop": True,
+                    "total_attempts": 2,
+                    "successful_attempts": len(successful_runs)
+                }, f, indent=2)
+            
+            logger.info(f"Completed multi-loop for {instance_id}: {len(successful_runs)}/2 successful attempts")
+        else:
+            env = Spider_Agent_Env(
+                env_config=env_config,
+                task_config=task_config,
+                cache_dir="./cache",
+                mnt_dir=output_dir
+            )
+            agent.set_env_and_task(env)
+            logger.info('Task input:' + task_config['instruction'])
+            done, result_output = agent.run()
+            trajectory = agent.get_trajectory()
 
-        os.makedirs(os.path.join(output_dir, "spider"), exist_ok=True)
-        result_files = env.post_process()
-        spider_result = {"finished": done, "steps": len(trajectory["trajectory"]),
+            os.makedirs(os.path.join(output_dir, "spider"), exist_ok=True)
+            result_files = env.post_process()
+            spider_result = {"finished": done, "steps": len(trajectory["trajectory"]),
                            "result": result_output,"result_files": result_files, **trajectory}
-        with open(os.path.join(output_dir, "spider/result.json"), "w") as f:
-            json.dump(spider_result, f, indent=2)
+            with open(os.path.join(output_dir, "spider/result.json"), "w") as f:
+                json.dump(spider_result, f, indent=2)
             
-            
-        
-        # Delete sqlite files
-        if task_type == 'local':
-            sqlite_files = glob.glob(os.path.join(output_dir, '*.sqlite')) + glob.glob(os.path.join(output_dir, '*.duckdb'))
-
-            for file_path in sqlite_files:
-                try:
-                    os.remove(file_path)
-                    print(f"Deleted: {file_path}")
-                except Exception as e:
-                    print(f"Error deleting {file_path}: {e}")
-        
+            # Delete sqlite files
+            if task_type == 'local':
+                sqlite_files = glob.glob(os.path.join(output_dir, '*.sqlite')) + glob.glob(os.path.join(output_dir, '*.duckdb'))
+                for file_path in sqlite_files:
+                    try:
+                        os.remove(file_path)
+                        print(f"Deleted: {file_path}")
+                    except Exception as e:
+                        print(f"Error deleting {file_path}: {e}")
         
         logger.info("Finished %s", instance_id)
-        env.close()
+        if not args.multi_loop:  # Only close env if not in multi_loop mode
+            env.close()
 
 if __name__ == '__main__':
     args = config()

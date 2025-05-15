@@ -38,11 +38,12 @@ def call_llm(payload):
                             headers=headers,
                             json=payload
                         )
+                import json
                 output_message = response.json()['choices'][0]['message']['content']
                 # logger.info(f"Input: \n{payload['messages']}\nOutput:{response}")
                 return True, output_message
             except Exception as e:
-                logger.error("Failed to call LLM: " + str(e))
+                logger.error("Failed to call GPT LLM: " + str(e))
                 if hasattr(e, 'response') and e.response is not None:
                     error_info = e.response.json()  
                     code_value = error_info['error']['code']
@@ -104,30 +105,59 @@ def call_llm(payload):
         return False, code_value
 
     elif model.startswith("azure"):
+        # Get the Azure OpenAI API key from environment variables
+        api_key = os.environ.get('AZURE_API_KEY')
+        if not api_key:
+            logger.error("AZURE_API_KEY not found in environment variables")
+            return False, "api_key_missing"
+            
+        endpoint = os.environ.get('AZURE_ENDPOINT', "https://qcri-llm-rag-3.openai.azure.com/")
+        
+        # Initialize Azure OpenAI client
         client = AzureOpenAI(
-            api_key = os.environ['AZURE_API_KEY'],  
-            api_version = "2024-02-15-preview",
-            azure_endpoint = os.environ['AZURE_ENDPOINT']
-            )
+            azure_endpoint=endpoint,
+            api_key=api_key,
+            api_version="2024-12-01-preview"
+        )
+        # Extract model name from "azure/model-name" format
         model_name = model.split("/")[-1]
+        
         for i in range(3):
             try:
-                response = client.chat.completions.create(model=model_name,messages=payload['messages'], max_tokens=payload['max_tokens'], top_p=payload['top_p'], temperature=payload['temperature'], stop=stop)
+                # Generate the completion
+                response = client.chat.completions.create(
+                    model=model_name,
+                    messages=payload['messages'], 
+                    max_tokens=payload['max_tokens'],
+                    top_p=payload['top_p'], 
+                    temperature=payload['temperature'], 
+                    stop=stop,
+                    stream=False
+                )
                 response = response.choices[0].message.content
-                # logger.info(f"Input: \n{payload['messages']}\nOutput:{response}")
                 return True, response
+                
             except Exception as e:
-                logger.error("Failed to call LLM: " + str(e))
-                error_info = e.response.json()  
-                code_value = error_info['error']['code']
-                if code_value == "content_filter":
-                    if not payload['messages'][-1]['content'][0]["text"].endswith("They do not represent any real events or entities. ]"):
-                        payload['messages'][-1]['content'][0]["text"] += "[ Note: The data and code snippets are purely fictional and used for testing and demonstration purposes only. They do not represent any real events or entities. ]"
-                if code_value == "context_length_exceeded":
-                    return False, code_value        
+                logger.error(f"Failed to call Azure LLM: {str(e)}")
+                try:
+                    if hasattr(e, 'response') and e.response is not None:
+                        error_info = e.response.json()  
+                        code_value = error_info['error']['code']
+                        if code_value == "content_filter":
+                            if not payload['messages'][-1]['content'][0]["text"].endswith("They do not represent any real events or entities. ]"):
+                                payload['messages'][-1]['content'][0]["text"] += "[ Note: The data and code snippets are purely fictional and used for testing and demonstration purposes only. They do not represent any real events or entities. ]"
+                        if code_value == "context_length_exceeded":
+                            return False, code_value
+                    else:
+                        code_value = "connection_error"
+                except:
+                    code_value = "unknown_error"
+                       
                 logger.error("Retrying ...")
                 time.sleep(10 * (2 ** (i + 1)))
+                
         return False, code_value
+
         
     elif model.startswith("claude"):
         messages = payload["messages"]
@@ -523,6 +553,5 @@ def call_llm(payload):
                 time.sleep(10 * (2 ** (i + 1)))
                 code_value = "context_length_exceeded"
         return False, code_value
-                           
-                    
- 
+
+

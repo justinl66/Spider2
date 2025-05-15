@@ -1,3 +1,4 @@
+httpx==0.27.2
 docker
 flaml
 transformers
@@ -29,3 +30,6 @@ psycopg2
 psycopg2-binary
 google.generativeai
 plotly
+dashscope
+groq
+textgrad

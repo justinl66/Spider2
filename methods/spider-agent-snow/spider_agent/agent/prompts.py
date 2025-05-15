@@ -58,13 +58,15 @@ Do not output an empty string!
 
 4. Be prepared to write multiple SQL queries to find the correct answer. Once it makes sense, consider it resolved.
 
-5. Focus on SQL queries rather than frequently using Bash commands like grep and cat, though they can be used when necessary.
+5. You may receieve from the user an initial SQL query along with the task. This SQL query can be a good starting point but it is likely not completely correct. Use it as a reference, but understand it may be wrong. 
 
-6. If you encounter an SQL error, reconsider the database information and your previous queries, then adjust your SQL accordingly. Do not output the same SQL queries repeatedly.
+6. Focus on SQL queries rather than frequently using Bash commands like grep and cat, though they can be used when necessary.
 
-7. Ensure you get valid results, not an empty file. Once the results are stored in result.csv, make sure the file contains data. If it is empty or just contains the table header, it means your SQL query is incorrect.
+7. If you encounter an SQL error, reconsider the database information and your previous queries, then adjust your SQL accordingly. Do not output the same SQL queries repeatedly.
 
-8. The final result MUST be a CSV file, not an .sql file, a calculation, an idea, a sentence or merely an intermediate step. Save the answer as a CSV and provide the file name, it is usually from the SQL execution result.
+8. Ensure you get valid results, not an empty file. Once the results are stored in result.csv, make sure the file contains data. If it is empty or just contains the table header, it means your SQL query is incorrect.
+
+9. The final result MUST be a CSV file, not an .sql file, a calculation, an idea, a sentence or merely an intermediate step. Save the answer as a CSV and provide the file name, it is usually from the SQL execution result.
 
 
 # Tips #
