@@ -1,0 +1,8 @@
+2025-05-07 23:21:43,253 - __main__ - INFO - Loaded 5 examples for evaluation
+2025-05-07 23:21:43,254 - __main__ - INFO - Starting prompt optimization with TextGrad
+2025-05-07 23:26:50,583 - __main__ - INFO - Loaded 5 examples for evaluation
+2025-05-07 23:26:50,583 - __main__ - INFO - Starting prompt optimization with TextGrad
+2025-05-07 23:26:50,584 - __main__ - INFO - Starting optimization iteration 1
+2025-05-07 23:38:43,245 - __main__ - INFO - Loaded 5 examples for evaluation
+2025-05-07 23:38:43,245 - __main__ - INFO - Starting prompt optimization with TextGrad
+2025-05-07 23:38:43,245 - __main__ - INFO - Starting optimization iteration 1
