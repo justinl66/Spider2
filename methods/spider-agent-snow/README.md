@@ -32,12 +32,11 @@ export OPENAI_API_KEY=your_openai_api_key
 python run.py --model gpt-4o -s test1
 ```
 
-
 ### For MARS
 ```
 export SPIDER_SNOW_PROMPT_PATH=/home/jl6/GitRepos/Spider2/methods/spider-agent-snow/textgrad_optimization/optimized_snowflake_prompt.py
 export AZURE_API_KEY=your_openai_api_key
-python run.py --example_index 0 --multi_loop --model azure/gpt-4o -s gpt-4o-test_run2
+python run.py --example_index 0 --multi_loop --use_rag --self_retrieval --model azure/o4-mini -s modified_test
 ```
 
 ### Running with RAG (Retrieval-Augmented Generation)
@@ -46,17 +45,29 @@ The agent now supports Retrieval-Augmented Generation (RAG) to enhance SQL queri
 
 ```
 # Run with default RAG settings
-python run.py --model gpt-4o -s rag_test1 --use_rag
+python run.py --model azure/o4-mini -s rag_test1 --use_rag
 
 # Run with custom RAG settings
-python run.py --model gpt-4o -s rag_test2 --use_rag \
+python run.py --model azure/o4-mini -s rag_test2 --use_rag \
   --embedding_model "sentence-transformers/all-mpnet-base-v2" \
   --persist_directory "./custom_rag_vectors" \
   --schema_dir "./examples" \
   --knowledge_dir "../../spider2-snow/resource/documents"
 ```
 
+### Using Multi-Loop with Self-Retrieval (Analogical Prompting)
 
+The agent supports self-retrieval functionality based on "Large Language Models as Analogical Reasoners" that generates relevant examples before each solution attempt:
+
+```
+# Run with multi-loop and self-retrieval enabled
+python run.py --model gpt-4o -s self_retrieval_test --multi_loop --self_retrieval
+
+# This will:
+# 1. Generate analogical examples before each attempt
+# 2. Use these examples to guide the solution process
+# 3. Provide better context for SQL problem solving
+```
 
 ### Evaluation
 

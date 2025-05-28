@@ -127,12 +127,7 @@ def call_llm(payload):
                 # Generate the completion
                 response = client.chat.completions.create(
                     model=model_name,
-                    messages=payload['messages'], 
-                    max_tokens=payload['max_tokens'],
-                    top_p=payload['top_p'], 
-                    temperature=payload['temperature'], 
-                    stop=stop,
-                    stream=False
+                    messages=payload['messages']
                 )
                 response = response.choices[0].message.content
                 return True, response

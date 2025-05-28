@@ -12,6 +12,7 @@ from tqdm import tqdm
 from spider_agent.envs.spider_agent import Spider_Agent_Env
 from spider_agent.agent.agents import PromptAgent
 from spider_agent.rag.integration import RagAugmentedAgent
+from spider_agent.self_retrieval import AnalogicalPrompter, DatabaseContextExtractor
 
 # Add support for custom prompts
 if os.environ.get("SPIDER_SNOW_PROMPT_PATH"):
@@ -62,6 +63,7 @@ def config() -> argparse.Namespace:
     )
     
     parser.add_argument("--multi_loop", action="store_true", default=False, help="Utilize multiple solution attempts to achieve best solution")
+    parser.add_argument("--self_retrieval", action="store_true", default=False, help="Enable self-retrieval (analogical prompting) for generating relevant examples before each attempt")
     
     parser.add_argument("--max_steps", type=int, default=20)
     
@@ -238,6 +240,14 @@ def test(
             all_runs = []
             last_successful_sql = None  # Track the last successful SQL query
             
+            # Initialize self-retrieval components if enabled
+            analogical_prompter = None
+            context_extractor = None
+            if args.self_retrieval:
+                analogical_prompter = AnalogicalPrompter(model=args.model)
+                context_extractor = DatabaseContextExtractor()
+                logger.info("Self-retrieval (analogical prompting) enabled")
+            
             for attempt in range(2):
                 # Create a separate output directory for each attempt
                 attempt_dir = os.path.join(output_dir, f"attempt_{attempt+1}")
@@ -254,25 +264,53 @@ def test(
                     mnt_dir=attempt_dir
                 )
                 
-                # If we have a previous successful solution, modify the task config
+                # Prepare task instruction with potential modifications
+                current_instruction = task_config["instruction"]
+                
+                # Add self-retrieval (analogical prompting) if enabled
+                if args.self_retrieval and analogical_prompter and context_extractor:
+                    try:
+                        logger.info(f"Generating analogical examples for attempt {attempt+1}")
+                        
+                        # Extract database context from the environment
+                        database_context = context_extractor.extract_database_context(task_config)
+                        
+                        # Generate analogical examples
+                        analogical_examples = analogical_prompter.generate_analogical_examples(
+                            task_instruction=current_instruction,
+                            database_context=database_context,
+                            num_examples=3
+                        )
+                        
+                        # Format examples for inclusion in prompt
+                        if analogical_examples:
+                            examples_text = analogical_prompter.format_examples_for_prompt(analogical_examples)
+                            current_instruction = examples_text + "\n" + current_instruction
+                            logger.info(f"Added {len(analogical_examples)} analogical examples to prompt")
+                        else:
+                            logger.warning("No analogical examples generated")
+                            
+                    except Exception as e:
+                        logger.warning(f"Failed to generate analogical examples: {e}")
+                
+                # If we have a previous successful solution, add it as well
                 if attempt > 0 and last_successful_sql:
-                    # Create a modified task config with the updated instruction
-                    modified_task_config = task_config.copy()
-                    modified_task_config["instruction"] = task_config["instruction"] + f"\n\nHere's a tentative previous solution that might help, however there is a possibility that it is wrong.:\n```\n{last_successful_sql}\n```"
-                    
-                    # Reset agent for this attempt with modified task
-                    agent.set_env_and_task(attempt_env)
-                    
-                    # Update the instruction after set_env_and_task (this accesses a public attribute)
-                    agent.instruction = modified_task_config["instruction"]
-                    agent.system_message = agent.system_message.replace(task_config["instruction"], modified_task_config["instruction"])
-                    
-                    # Update the first message in history_messages with the new system message
-                    if agent.history_messages and agent.history_messages[0]["role"] == "system":
-                        agent.history_messages[0]["content"][0]["text"] = agent.system_message
-                else:
-                    # Standard initialization for first attempt
-                    agent.set_env_and_task(attempt_env)
+                    current_instruction = current_instruction + f"\n\nHere's a tentative previous solution that might help, however there is a possibility that it is wrong.:\n```\n{last_successful_sql}\n```"
+                
+                # Create modified task config with the enhanced instruction
+                modified_task_config = task_config.copy()
+                modified_task_config["instruction"] = current_instruction
+                
+                # Set up agent with the modified task
+                agent.set_env_and_task(attempt_env)
+                
+                # Update the instruction and system message
+                agent.instruction = modified_task_config["instruction"]
+                agent.system_message = agent.system_message.replace(task_config["instruction"], modified_task_config["instruction"])
+                
+                # Update the first message in history_messages with the new system message
+                if agent.history_messages and agent.history_messages[0]["role"] == "system":
+                    agent.history_messages[0]["content"][0]["text"] = agent.system_message
                 
                 # Run the agent
                 logger.info(f'Task input (attempt {attempt+1}/2): {agent.instruction}')

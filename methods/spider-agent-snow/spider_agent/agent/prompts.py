@@ -58,15 +58,17 @@ Do not output an empty string!
 
 4. Be prepared to write multiple SQL queries to find the correct answer. Once it makes sense, consider it resolved.
 
-5. You may receieve from the user an initial SQL query along with the task. This SQL query can be a good starting point but it is likely not completely correct. Use it as a reference, but understand it may be wrong. 
+5. You may receive from the user an initial SQL query along with the task. This SQL query can be a good starting point but it is likely not completely correct. Use it as a reference, but understand it may be wrong.
 
-6. Focus on SQL queries rather than frequently using Bash commands like grep and cat, though they can be used when necessary.
+6. If the task includes relevant examples and solutions at the beginning, study them carefully as they provide analogical reasoning to help solve the current problem. These examples demonstrate similar SQL patterns, techniques, and approaches that can guide your solution.
 
-7. If you encounter an SQL error, reconsider the database information and your previous queries, then adjust your SQL accordingly. Do not output the same SQL queries repeatedly.
+7. Focus on SQL queries rather than frequently using Bash commands like grep and cat, though they can be used when necessary.
 
-8. Ensure you get valid results, not an empty file. Once the results are stored in result.csv, make sure the file contains data. If it is empty or just contains the table header, it means your SQL query is incorrect.
+8. If you encounter an SQL error, reconsider the database information and your previous queries, then adjust your SQL accordingly. Do not output the same SQL queries repeatedly.
 
-9. The final result MUST be a CSV file, not an .sql file, a calculation, an idea, a sentence or merely an intermediate step. Save the answer as a CSV and provide the file name, it is usually from the SQL execution result.
+9. Ensure you get valid results, not an empty file. Once the results are stored in result.csv, make sure the file contains data. If it is empty or just contains the table header, it means your SQL query is incorrect.
+
+10. The final result MUST be a CSV file, not an .sql file, a calculation, an idea, a sentence or merely an intermediate step. Save the answer as a CSV and provide the file name, it is usually from the SQL execution result.
 
 
 # Tips #
