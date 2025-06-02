@@ -235,7 +235,7 @@ def test(
         task_config['config'] = [{"type": "copy_all_subfiles", "parameters": {"dirs": [os.path.join(source_data_dir, task_config["instance_id"])]}}]
 
         if args.multi_loop:
-            logger.info(f"Running multi-loop (2 attempts) for {instance_id}")
+            logger.info(f"Running multi-loop (3 attempts) for {instance_id}")
             successful_runs = []
             all_runs = []
             last_successful_sql = None  # Track the last successful SQL query
@@ -248,7 +248,7 @@ def test(
                 context_extractor = DatabaseContextExtractor()
                 logger.info("Self-retrieval (analogical prompting) enabled")
             
-            for attempt in range(2):
+            for attempt in range(3):
                 # Create a separate output directory for each attempt
                 attempt_dir = os.path.join(output_dir, f"attempt_{attempt+1}")
                 os.makedirs(attempt_dir, exist_ok=True)
@@ -313,7 +313,7 @@ def test(
                     agent.history_messages[0]["content"][0]["text"] = agent.system_message
                 
                 # Run the agent
-                logger.info(f'Task input (attempt {attempt+1}/2): {agent.instruction}')
+                logger.info(f'Task input (attempt {attempt+1}/3): {agent.instruction}')
                 done, result_output = agent.run()
                 trajectory = agent.get_trajectory()
                 
@@ -368,24 +368,24 @@ def test(
             # Save multi-run summary
             with open(os.path.join(output_dir, "multi_results.json"), "w") as f:
                 json.dump({
-                    "total_attempts": 2,
+                    "total_attempts": 3,
                     "successful_attempts": len(successful_runs),
                     "successful_run_numbers": [run["attempt_number"] for run in successful_runs]
                 }, f, indent=2)
             
-            # Use best run as main result (first successful run, or last run if none succeeded)
-            best_run = successful_runs[0] if successful_runs else all_runs[-1]
+            # Use best run as main result (last successful run, or last run if none succeeded)
+            best_run = successful_runs[-1] if successful_runs else all_runs[-1]
             
             # Save as main result.json
             with open(os.path.join(output_dir, "best_result.json"), "w") as f:
                 json.dump({
                     **best_run,
                     "multi_loop": True,
-                    "total_attempts": 2,
+                    "total_attempts": 3,
                     "successful_attempts": len(successful_runs)
                 }, f, indent=2)
             
-            logger.info(f"Completed multi-loop for {instance_id}: {len(successful_runs)}/2 successful attempts")
+            logger.info(f"Completed multi-loop for {instance_id}: {len(successful_runs)}/3 successful attempts")
         else:
             env = Spider_Agent_Env(
                 env_config=env_config,
