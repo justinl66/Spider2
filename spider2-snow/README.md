@@ -55,8 +55,12 @@ python run.py --model gpt-4o -s test1
 
 ```
 python get_spider2snow_submission_data.py --experiment_suffix gpt-4o-test1 --results_folder_name ../../spider2-snow/evaluation_suite/gpt-4o-test1
+for mars:
+python get_spider2snow_submission_data.py --experiment_suffix o4-mini-base_test --results_folder_name ../../spider2-snow/evaluation_suite/o4-mini-base_eval
 
 cd ../../spider2-snow/evaluation_suite
 python evaluate.py --mode exec_result --result_dir gpt-4o-test1
+for mars:
+python evaluate.py --mode exec_result --result_dir o4-mini-base_eval
 
 ```

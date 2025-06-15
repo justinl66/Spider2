@@ -56,16 +56,23 @@ def postprocess(args):
     for instance_id in os.listdir(output_dir):
         if not os.path.isdir(os.path.join(output_dir, instance_id)):
             continue
-        json_file_path = os.path.join(output_dir, instance_id, "spider", "result.json")
+        json_file_path = os.path.join(output_dir, instance_id, "best_result.json")
         try:
             with open(json_file_path, 'r') as file:
                 instance_result_data = json.load(file)
         except FileNotFoundError:
-            print(f"Error: File not found - {json_file_path}")
+            print(f"Warning: File not found - {json_file_path}. Skipping this instance.")
+            continue
+        except json.JSONDecodeError:
+            print(f"Warning: Invalid JSON in file - {json_file_path}. Skipping this instance.")
             continue
         
         result_folder_root_path = os.path.join(output_dir, instance_id)
         answer_or_path = instance_result_data['result']
+        
+        # Get the attempt number from best_result.json
+        attempt_number = instance_result_data.get('attempt_number', 1)
+        attempt_folder = f"attempt_{attempt_number}"
         
         if answer_or_path.startswith('/workspace'):
             answer_or_path = answer_or_path.replace('/workspace/','')
@@ -78,28 +85,42 @@ def postprocess(args):
             csv_file_path = os.path.join(submission_dir, f'{instance_id}.csv')
 
             # Write the answer_or_path into the CSV file
-            with open(csv_file_path, mode='w', newline='') as file:
-                writer = csv.writer(file)
-                writer.writerow(['output'])  # Write the column header
-                writer.writerow([answer_or_path])  # Write the content
+            try:
+                with open(csv_file_path, mode='w', newline='') as file:
+                    writer = csv.writer(file)
+                    writer.writerow(['output'])  # Write the column header
+                    writer.writerow([answer_or_path])  # Write the content
+            except Exception as e:
+                print(f"Warning: Failed to create CSV file for {instance_id}: {str(e)}. Skipping this instance.")
+                continue
 
-        elif os.path.exists(os.path.join(result_folder_root_path,answer_or_path)):
+        elif os.path.exists(os.path.join(result_folder_root_path, attempt_folder, answer_or_path)):
+            # File exists in the attempt folder - copy it directly
             results_metadata.append({'instance_id': instance_id, 'answer_or_path': answer_or_path, 'answer_type': 'file'})
             try:
-                copy_folder(result_folder_root_path, os.path.join(submission_dir, instance_id), files_to_copy=answer_or_path)
-            except:
-                import pdb; pdb.set_trace()
-        elif not os.path.exists(os.path.join(result_folder_root_path,answer_or_path)):
+                source_file = os.path.join(result_folder_root_path, attempt_folder, answer_or_path)
+                dest_file = os.path.join(submission_dir, f'{instance_id}.csv')
+                
+                # Copy the file from the best attempt folder
+                shutil.copy2(source_file, dest_file)
+            except Exception as e:
+                print(f"Warning: Failed to copy file for {instance_id}: {str(e)}. Skipping this instance.")
+                continue
+        elif not os.path.exists(os.path.join(result_folder_root_path, attempt_folder, answer_or_path)):
             results_metadata.append({'instance_id': instance_id, 'answer_or_path': answer_or_path, 'answer_type': 'answer'})
 
             # Create a new CSV file in the submission directory with the instance_id as the file name
             csv_file_path = os.path.join(submission_dir, f'{instance_id}.csv')
 
             # Write the answer_or_path into the CSV file
-            with open(csv_file_path, mode='w', newline='') as file:
-                writer = csv.writer(file)
-                writer.writerow(['output'])  # Write the column header
-                writer.writerow([answer_or_path])  # Write the content
+            try:
+                with open(csv_file_path, mode='w', newline='') as file:
+                    writer = csv.writer(file)
+                    writer.writerow(['output'])  # Write the column header
+                    writer.writerow([answer_or_path])  # Write the content
+            except Exception as e:
+                print(f"Warning: Failed to create CSV file for {instance_id}: {str(e)}. Skipping this instance.")
+                continue
     
     # with open(os.path.join(submission_dir, 'results_metadata.jsonl'), 'w') as file:
     #     for entry in results_metadata:
@@ -110,14 +131,17 @@ def postprocess(args):
     for sub_dir in os.listdir(submission_dir):
         sub_dir_path = os.path.join(submission_dir, sub_dir)
         if os.path.isdir(sub_dir_path):
-            csv_files = [f for f in os.listdir(sub_dir_path) if f.endswith('.csv')]
-            if len(csv_files) == 1:
-                csv_file_path = os.path.join(sub_dir_path, csv_files[0])
-                new_csv_file_path = os.path.join(submission_dir, f"{sub_dir}.csv")
-                shutil.move(csv_file_path, new_csv_file_path)
-                shutil.rmtree(sub_dir_path)
-            else:
-                print(f"Warning: Expected one CSV file in {sub_dir_path}, found {len(csv_files)}")
+            try:
+                csv_files = [f for f in os.listdir(sub_dir_path) if f.endswith('.csv')]
+                if len(csv_files) == 1:
+                    csv_file_path = os.path.join(sub_dir_path, csv_files[0])
+                    new_csv_file_path = os.path.join(submission_dir, f"{sub_dir}.csv")
+                    shutil.move(csv_file_path, new_csv_file_path)
+                    shutil.rmtree(sub_dir_path)
+                else:
+                    print(f"Warning: Expected one CSV file in {sub_dir_path}, found {len(csv_files)}")
+            except Exception as e:
+                print(f"Warning: Failed to process directory {sub_dir_path}: {str(e)}. Skipping this directory.")
 
     print(f"Processed submission_dir: {submission_dir}")
     
