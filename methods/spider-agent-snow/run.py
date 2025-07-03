@@ -63,6 +63,7 @@ def config() -> argparse.Namespace:
     )
     
     parser.add_argument("--multi_loop", action="store_true", default=False, help="Utilize multiple solution attempts to achieve best solution")
+    parser.add_argument("--num_iterations", type=int, default=3, help="Number of iterations when using multi_loop (default: 3)")
     parser.add_argument("--self_retrieval", action="store_true", default=False, help="Enable self-retrieval (analogical prompting) for generating relevant examples before each attempt")
     
     parser.add_argument("--max_steps", type=int, default=20)
@@ -235,7 +236,7 @@ def test(
         task_config['config'] = [{"type": "copy_all_subfiles", "parameters": {"dirs": [os.path.join(source_data_dir, task_config["instance_id"])]}}]
 
         if args.multi_loop:
-            logger.info(f"Running multi-loop (3 attempts) for {instance_id}")
+            logger.info(f"Running multi-loop ({args.num_iterations} attempts) for {instance_id}")
             successful_runs = []
             all_runs = []
             last_successful_sql = None  # Track the last successful SQL query
@@ -248,7 +249,7 @@ def test(
                 context_extractor = DatabaseContextExtractor()
                 logger.info("Self-retrieval (analogical prompting) enabled")
             
-            for attempt in range(3):
+            for attempt in range(args.num_iterations):
                 # Create a separate output directory for each attempt
                 attempt_dir = os.path.join(output_dir, f"attempt_{attempt+1}")
                 os.makedirs(attempt_dir, exist_ok=True)
@@ -313,7 +314,7 @@ def test(
                     agent.history_messages[0]["content"][0]["text"] = agent.system_message
                 
                 # Run the agent
-                logger.info(f'Task input (attempt {attempt+1}/3): {agent.instruction}')
+                logger.info(f'Task input (attempt {attempt+1}/{args.num_iterations}): {agent.instruction}')
                 done, result_output = agent.run()
                 trajectory = agent.get_trajectory()
                 
@@ -368,7 +369,7 @@ def test(
             # Save multi-run summary
             with open(os.path.join(output_dir, "multi_results.json"), "w") as f:
                 json.dump({
-                    "total_attempts": 3,
+                    "total_attempts": args.num_iterations,
                     "successful_attempts": len(successful_runs),
                     "successful_run_numbers": [run["attempt_number"] for run in successful_runs]
                 }, f, indent=2)
@@ -381,11 +382,11 @@ def test(
                 json.dump({
                     **best_run,
                     "multi_loop": True,
-                    "total_attempts": 3,
+                    "total_attempts": args.num_iterations,
                     "successful_attempts": len(successful_runs)
                 }, f, indent=2)
             
-            logger.info(f"Completed multi-loop for {instance_id}: {len(successful_runs)}/3 successful attempts")
+            logger.info(f"Completed multi-loop for {instance_id}: {len(successful_runs)}/{args.num_iterations} successful attempts")
         else:
             env = Spider_Agent_Env(
                 env_config=env_config,
